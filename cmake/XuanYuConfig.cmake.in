@@ -1,0 +1,5 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/XuanYuTargets.cmake")
+
+set(XUANYU_INCLUDE_DIR "${CMAKE_INSTALL_PREFIX}/include")

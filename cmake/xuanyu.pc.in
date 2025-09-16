@@ -1,0 +1,10 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${exec_prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: XuanYu
+Description: High Security Communication Framework
+Version: @PACKAGE_VERSION@
+Libs: -L${libdir} -lxuanyu
+Cflags: -I${includedir}

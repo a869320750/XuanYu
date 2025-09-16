@@ -1,0 +1,10 @@
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: GmSSL
+Description: GmSSL cryptographic library (SM2/SM3/SM4)
+Version: 3.1.2
+Libs: -L${libdir} -lgmssl
+Cflags: -I${includedir}
