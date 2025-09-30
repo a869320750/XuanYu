@@ -1,0 +1,23 @@
+FROM debian:12-slim
+
+# 这个镜像用于在与目标兼容的 glibc 环境中交叉/本地构建 arm 二进制。
+# Debian 12 (bookworm) 的 glibc 版本接近较新的稳定版，但你可以改为 ubuntu:22.04 等以匹配目标系统。
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake git wget ca-certificates pkg-config \
+    gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf binutils-arm-linux-gnueabihf \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+
+# 默认构建脚本将使用 TARGET_PLATFORM=arm
+COPY . /src
+
+RUN mkdir -p build && cmake -S . -B build -DTARGET_PLATFORM=arm && cmake --build build -j$(nproc) --target uavchip-auth || true
+
+CMD ["/bin/bash"]
+
+# docker build -t xuanyu-build -f Dockerfile.build .
+# docker run --rm -it -v "$(pwd)":/src -w /src xuanyu-build
