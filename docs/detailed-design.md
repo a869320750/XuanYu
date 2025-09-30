@@ -232,87 +232,49 @@ int xuanyu_decrypt(const uint8_t* ciphertext, size_t cipher_len,
 - **易于集成**：直接在Python代码中import使用
 - **错误处理**：完整的异常处理和错误码返回
 
-### 3.3 客户端状态机
+### 3.3 客户端认证流程
 
 ```mermaid
-stateDiagram-v2
-    direction LR
+flowchart TD
+    A[[开始认证]] --> B[加载本地私钥]
+    B --> C{私钥加载成功?}
+    C -->|No| E[[认证失败]]
+    C -->|Yes| D[建立TCP连接]
     
-    [*] --> Idle
+    D --> F{连接成功?}
+    F -->|No| E
+    F -->|Yes| G[生成临时密钥对<br/>(a, A=a×G)]
     
-    state Idle {
-        [*] --> 等待认证请求
-    }
+    G --> H[生成随机数nonce_c]
+    H --> I[构造CLIENT_HELLO消息<br/>{device_id, nonce_c, A, sig}]
+    I --> J[发送CLIENT_HELLO]
     
-    state LoadingKeys {
-        [*] --> 加载设备私钥
-        加载设备私钥 --> 加载设备证书
-        加载设备证书 --> 验证证书有效性
-    }
+    J --> K[等待SERVER_HELLO]
+    K --> L{超时或错误?}
+    L -->|Yes| E
+    L -->|No| M[接收SERVER_HELLO<br/>{server_id, nonce_s, B, sig}]
     
-    state Connecting {
-        [*] --> 建立TCP连接
-        建立TCP连接 --> 连接验证
-    }
+    M --> N[验证服务端签名]
+    N --> O{签名有效?}
+    O -->|No| E
+    O -->|Yes| P[计算共享密钥<br/>K = a × B]
     
-    state SendingHello {
-        [*] --> 生成临时密钥对
-        生成临时密钥对 --> 构造CLIENT_HELLO
-        构造CLIENT_HELLO 	--> 发送握手消息
-    }
+    P --> Q[派生会话密钥<br/>session_key = KDF(K, nonce_c, nonce_s)]
+    Q --> R[生成确认MAC<br/>mac = SM4_CMAC(session_key, "CLIENT_CONFIRM")]
+    R --> S[发送CLIENT_CONFIRM<br/>{device_id, mac}]
     
-    state WaitingServerHello {
-        [*] --> 等待服务端响应
-        等待服务端响应 --> 接收SERVER_HELLO
-    }
+    S --> T[等待SERVER_CONFIRM]
+    T --> U{收到确认?}
+    U -->|No| E
+    U -->|Yes| V[验证服务端MAC]
+    V --> W{验证成功?}
+    W -->|No| E
+    W -->|Yes| X[保存会话密钥]
+    X --> Y[[认证成功<br/>安全通道建立]]
     
-    state VerifyingServer {
-        [*] --> 验证服务端证书
-        验证服务端证书 --> 验证服务端签名
-        验证服务端签名 --> 计算共享密钥
-    }
-    
-    state SendingConfirm {
-        [*] --> 派生会话密钥
-        派生会话密钥 --> 生成确认MAC
-        生成确认MAC --> 发送CLIENT_CONFIRM
-    }
-    
-    state WaitingFinalConfirm {
-        [*] --> 等待最终确认
-        等待最终确认 --> 验证服务端MAC
-    }
-    
-    state Authenticated {
-        [*] --> 保存会话密钥
-        保存会话密钥 --> 建立安全通道
-    }
-    
-    state Error {
-        [*] --> 记录错误信息
-        记录错误信息 --> 清理资源
-    }
-    
-    Idle --> LoadingKeys : xuanyu auth
-    LoadingKeys --> Connecting : 密钥加载成功
-    LoadingKeys --> Error : 密钥加载失败
-    
-    Connecting --> SendingHello : TCP连接成功
-    Connecting --> Error : 连接失败
-    
-    SendingHello --> WaitingServerHello : 发送CLIENT_HELLO
-    WaitingServerHello --> VerifyingServer : 收到SERVER_HELLO
-    WaitingServerHello --> Error : 超时或错误响应
-    
-    VerifyingServer --> SendingConfirm : 服务端验证成功
-    VerifyingServer --> Error : 服务端验证失败
-    
-    SendingConfirm --> WaitingFinalConfirm : 发送CLIENT_CONFIRM
-    WaitingFinalConfirm --> Authenticated : 收到成功确认
-    WaitingFinalConfirm --> Error : 认证失败
-    
-    Authenticated --> [*] : 会话建立完成
-    Error --> [*] : 错误处理完成
+    E --> Z[清理资源并记录错误]
+    Z --> AA[[结束]]
+    Y --> AA
 ```
 
 ## 4. 服务端功能设计
@@ -363,95 +325,61 @@ xuanyu-server --list-sessions
 xuanyu-server --cleanup-sessions
 ```
 
-### 4.3 服务端状态机
+### 4.3 服务端认证流程
 
 ```mermaid
-stateDiagram-v2
-    direction LR
+flowchart TD
+    A[[服务端启动]] --> B[监听端口8443]
+    B --> C[等待客户端连接]
     
-    [*] --> Listening
+    C --> D{收到连接请求?}
+    D -->|No| C
+    D -->|Yes| E[接受TCP连接]
     
-    state Listening {
-        [*] --> 监听端口
-        监听端口 --> 等待客户端连接
-    }
+    E --> F{连接建立成功?}
+    F -->|No| G[记录错误并清理]
+    F -->|Yes| H[等待CLIENT_HELLO消息]
     
-    state AcceptingConnection {
-        [*] --> 接受连接请求
-        接受连接请求 --> 建立TCP连接
-        建立TCP连接 --> 验证连接参数
-    }
+    H --> I{超时或格式错误?}
+    I -->|Yes| G
+    I -->|No| J[接收CLIENT_HELLO<br/>{device_id, nonce_c, A, sig}]
     
-    state WaitingClientHello {
-        [*] --> 等待握手消息
-        等待握手消息 --> 接收CLIENT_HELLO
-        接收CLIENT_HELLO --> 解析消息格式
-    }
+    J --> K[查找客户端公钥]
+    K --> L{客户端已注册?}
+    L -->|No| G
+    L -->|Yes| M[验证客户端签名]
     
-    state VerifyingClient {
-        [*] --> 验证客户端证书
-        验证客户端证书 --> 验证客户端签名
-        验证客户端签名 --> 检查证书有效期
-        检查证书有效期 --> 验证证书链
-    }
+    M --> N{签名有效?}
+    N -->|No| G
+    N -->|Yes| O[生成临时密钥对<br/>(b, B=b×G)]
     
-    state SendingServerHello {
-        [*] --> 生成临时密钥对
-        生成临时密钥对 --> 生成随机数
-        生成随机数 --> 构造SERVER_HELLO
-        构造SERVER_HELLO --> 发送响应消息
-    }
+    O --> P[生成随机数nonce_s]
+    P --> Q[构造SERVER_HELLO消息<br/>{server_id, nonce_s, B, sig}]
+    Q --> R[发送SERVER_HELLO]
     
-    state WaitingClientConfirm {
-        [*] --> 等待客户端确认
-        等待客户端确认 --> 接收CLIENT_CONFIRM
-        接收CLIENT_CONFIRM --> 验证确认MAC
-    }
+    R --> S[等待CLIENT_CONFIRM]
+    S --> T{超时或错误?}
+    T -->|Yes| G
+    T -->|No| U[接收CLIENT_CONFIRM<br/>{device_id, mac}]
     
-    state GeneratingSession {
-        [*] --> 计算共享密钥
-        计算共享密钥 --> 派生会话密钥
-        派生会话密钥 --> 分配会话ID
-        分配会话ID --> 存储会话信息
-    }
+    U --> V[计算共享密钥<br/>K = b × A]
+    V --> W[派生会话密钥<br/>session_key = KDF(K, nonce_c, nonce_s)]
+    W --> X[验证客户端MAC]
     
-    state SendingFinalConfirm {
-        [*] --> 生成最终确认
-        生成最终确认 --> 发送SERVER_CONFIRM
-        发送SERVER_CONFIRM --> 确认发送成功
-    }
+    X --> Y{验证成功?}
+    Y -->|No| G
+    Y -->|Yes| Z[生成服务端MAC<br/>mac = SM4_CMAC(session_key, "SERVER_CONFIRM")]
     
-    state SessionEstablished {
-        [*] --> 会话建立成功
-        会话建立成功 --> 记录会话日志
-        记录会话日志 --> 启动会话监控
-    }
+    Z --> AA[发送SERVER_CONFIRM<br/>{server_id, mac}]
+    AA --> BB[分配会话ID]
+    BB --> CC[存储会话信息]
+    CC --> DD[[会话建立成功]]
     
-    state Cleanup {
-        [*] --> 清理连接资源
-        清理连接资源 --> 记录错误信息
-        记录错误信息 --> 释放内存
-    }
+    DD --> EE[记录会话日志]
+    EE --> C
     
-    Listening --> AcceptingConnection : 收到连接请求
-    AcceptingConnection --> WaitingClientHello : 连接建立成功
-    AcceptingConnection --> Listening : 连接失败
-    
-    WaitingClientHello --> VerifyingClient : 收到CLIENT_HELLO
-    WaitingClientHello --> Cleanup : 超时
-    
-    VerifyingClient --> SendingServerHello : 客户端验证成功
-    VerifyingClient --> Cleanup : 客户端验证失败
-    
-    SendingServerHello --> WaitingClientConfirm : 发送SERVER_HELLO
-    WaitingClientConfirm --> GeneratingSession : 收到CLIENT_CONFIRM
-    WaitingClientConfirm --> Cleanup : 超时或验证失败
-    
-    GeneratingSession --> SendingFinalConfirm : 会话密钥生成成功
-    SendingFinalConfirm --> SessionEstablished : 发送确认
-    
-    SessionEstablished --> Listening : 会话建立完成
-    Cleanup --> Listening : 清理连接资源
+    G --> FF[释放连接资源]
+    FF --> C
 ```
 
 ## 5. 认证流程详细设计
@@ -483,12 +411,12 @@ sequenceDiagram
     Note over C,S: 阶段2: 身份交换
     C->>C: 生成临时密钥对(a, A)
     C->>C: 生成随机数nonce_c
-    C->>S: CLIENT_HELLO {device_id, nonce_c, A, cert_c, sig_c}
+    C->>S: CLIENT_HELLO {device_id, nonce_c, A, sig_c}
     
     S->>S: 验证cert_c和sig_c
     S->>S: 生成临时密钥对(b, B)
     S->>S: 生成随机数nonce_s
-    S->>C: SERVER_HELLO {server_id, nonce_s, B, cert_s, sig_s}
+    S->>C: SERVER_HELLO {server_id, nonce_s, B, sig_s}
     
     Note over C,S: 阶段3: 密钥协商
     C->>C: 验证cert_s和sig_s
