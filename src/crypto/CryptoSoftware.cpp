@@ -42,8 +42,6 @@ std::string CryptoSoftware::getLastError() const {
 
 bool CryptoSoftware::generateSM2KeyPair(std::vector<uint8_t>& publicKey, 
                                         std::vector<uint8_t>& privateKey) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    
     // 简化实现：生成伪随机密钥对
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -66,8 +64,6 @@ bool CryptoSoftware::generateSM2KeyPair(std::vector<uint8_t>& publicKey,
 }
 
 std::vector<uint8_t> CryptoSoftware::generateRandom(size_t length) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    
     std::vector<uint8_t> result(length);
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -84,8 +80,6 @@ std::vector<uint8_t> CryptoSoftware::generateRandom(size_t length) {
 bool CryptoSoftware::sm2Sign(const std::vector<uint8_t>& data,
                             const std::vector<uint8_t>& privateKey,
                             std::vector<uint8_t>& signature) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    
     if (data.empty() || privateKey.size() != 32) {
         lastErrorCode_ = -1;
         return false;
@@ -111,8 +105,6 @@ bool CryptoSoftware::sm2Sign(const std::vector<uint8_t>& data,
 bool CryptoSoftware::sm2Verify(const std::vector<uint8_t>& data,
                                const std::vector<uint8_t>& signature,
                                const std::vector<uint8_t>& publicKey) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    
     if (data.empty() || signature.size() != 64 || publicKey.size() != 65) {
         lastErrorCode_ = -1;
         return false;
@@ -144,8 +136,6 @@ bool CryptoSoftware::sm4Encrypt(const std::vector<uint8_t>& plaintext,
                                 const std::vector<uint8_t>& key,
                                 const std::vector<uint8_t>& iv,
                                 std::vector<uint8_t>& ciphertext) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    
     if (plaintext.empty() || key.size() != 16 || iv.size() != 16) {
         lastErrorCode_ = -1;
         return false;
@@ -165,8 +155,6 @@ bool CryptoSoftware::sm4Decrypt(const std::vector<uint8_t>& ciphertext,
                                 const std::vector<uint8_t>& key,
                                 const std::vector<uint8_t>& iv,
                                 std::vector<uint8_t>& plaintext) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    
     if (ciphertext.empty() || key.size() != 16 || iv.size() != 16) {
         lastErrorCode_ = -1;
         return false;
@@ -183,8 +171,6 @@ bool CryptoSoftware::sm4Decrypt(const std::vector<uint8_t>& ciphertext,
 }
 
 bool CryptoSoftware::sm3Hash(const std::vector<uint8_t>& data, std::vector<uint8_t>& hash) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    
     if (data.empty()) {
         lastErrorCode_ = -1;
         return false;
@@ -606,6 +592,10 @@ int CryptoSoftware::sm4Final(uint8_t keyIndex) {
 int CryptoSoftware::sm4Crypto(uint8_t keyIndex, uint8_t type, uint8_t mode, const uint8_t* icv, 
                              const uint8_t* inputBuf, uint16_t msgByteLen, uint8_t* outputBuf) {
     std::lock_guard<std::mutex> lock(mutex_);
+
+    (void)type;
+    (void)mode;
+    (void)icv;
     
     if (keyIndex >= sm4Keys_.size() || !inputBuf || msgByteLen == 0 || !outputBuf) {
         lastErrorCode_ = -1;

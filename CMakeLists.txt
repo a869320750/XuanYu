@@ -85,7 +85,6 @@ find_package(Threads REQUIRED)
 
 # 源文件
 set(XUANYU_SOURCES
-    src/transport/TransportSocket.cpp
     src/crypto/CryptoSoftware.cpp
     src/communication/SecureBase.cpp
     src/communication/SecureClient.cpp
@@ -94,8 +93,7 @@ set(XUANYU_SOURCES
 
 # 头文件
 set(XUANYU_HEADERS
-    include/transport/ITransportAdapter.h
-    include/transport/TransportSocket.h
+
     include/crypto/ICryptoProvider.h
     include/crypto/CryptoSoftware.h
     include/communication/SecureBase.h

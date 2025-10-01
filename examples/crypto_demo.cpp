@@ -11,10 +11,20 @@ using namespace xuanyu::crypto;
 void printHex(const std::vector<uint8_t>& data, const std::string& prefix) {
     std::cout << prefix << ": ";
     for (size_t i = 0; i < data.size(); ++i) {
-        std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)data[i];
-        if (i % 16 == 15) std::cout << std::endl << "          ";
+        std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[i]);
+        if (i > 0 && (i + 1) % 16 == 0 && (i + 1) < data.size()) {
+            std::cout << std::endl << "          ";
+        }
     }
     std::cout << std::dec << std::endl;
+}
+
+void printHex(const uint8_t* data, size_t len)
+{
+    for (size_t i = 0; i < len; ++i) {
+        std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[i]);
+    }
+    std::cout << std::dec;
 }
 
 void demonstrateSM3() {
@@ -145,10 +155,9 @@ void demonstrateSM2() {
     }
 }
 
-void demonstrateICryptoProviderInterface() {
+void demonstrateICryptoProviderInterface(xuanyu::crypto::ICryptoProvider& crypto)
+{
     std::cout << "\n=== ICryptoProvider Interface Demonstration ===" << std::endl;
-    
-    CryptoSoftware crypto;
     
     // 开启加密服务
     int openResult = crypto.open();
@@ -156,46 +165,79 @@ void demonstrateICryptoProviderInterface() {
     
     // 生成随机数
     uint8_t randomBuf[32];
-    int randomResult = crypto.getRandom(randomBuf, 32);
+    int randomResult = crypto.getRandom(randomBuf, sizeof(randomBuf));
     if (randomResult == 0) {
         std::cout << "Random bytes generated: ";
-        for (int i = 0; i < 32; ++i) {
-            std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)randomBuf[i];
-        }
-        std::cout << std::dec << std::endl;
+        printHex(randomBuf, sizeof(randomBuf));
+        std::cout << std::endl;
     }
     
     // SM2密钥对管理
     int keyGenResult = crypto.generateSM2KeyPair(0); // 槽位0
-    std::cout << "SM2 key pair generation in slot 0: " << keyGenResult << std::endl;
+    std::cout << "SM2 key pair generation in slot 0 result: " << keyGenResult << std::endl;
     
     // 导出公钥
     uint8_t pubKeyBuf[65];
     int exportResult = crypto.exportSM2PubKey(pubKeyBuf, 0);
     if (exportResult == 0) {
-        std::cout << "Public key exported from slot 0: ";
-        for (int i = 0; i < 10; ++i) { // 只显示前10字节
-            std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)pubKeyBuf[i];
-        }
-        std::cout << "..." << std::dec << std::endl;
+        std::cout << "Public key exported from slot 0 (first 10 bytes): ";
+        printHex(pubKeyBuf, 10);
+        std::cout << "..." << std::endl;
     }
     
     // 用户ID管理
     uint8_t userId[] = "test@example.com";
-    int importIdResult = crypto.importID(userId, strlen((char*)userId), 2);
+    int importIdResult = crypto.importID(userId, static_cast<uint16_t>(strlen(reinterpret_cast<const char*>(userId))), 2);
     std::cout << "User ID import result: " << importIdResult << std::endl;
     
     // SM4密钥管理
-    uint8_t sm4Key[16] = {
-        0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF,
-        0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10
-    };
-    int setKeyResult = crypto.setSM4Key(0, sm4Key);
-    std::cout << "SM4 key set result: " << setKeyResult << std::endl;
+    uint8_t key[16] = {0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10};
+    int sm4SetKeyResult = crypto.setSM4Key(1, key); // 密钥槽位1
+    std::cout << "SM4 set key result: " << sm4SetKeyResult << std::endl;
     
-    // 关闭加密服务
-    int closeResult = crypto.close();
-    std::cout << "Crypto service close result: " << closeResult << std::endl;
+    // 数据加密
+    uint8_t plain[] = "Hello, SM4! 123"; // 16 bytes
+    uint8_t encrypted[32];
+    uint8_t iv_enc[] = "1234567890123456";
+    int encryptResult = crypto.sm4Crypto(1, 0, 1, iv_enc, plain, sizeof(plain) - 1, encrypted); // keyIndex=1, type=encrypt, mode=CBC
+    if (encryptResult == 0) {
+        std::cout << "Encrypted data: ";
+        printHex(encrypted, 16); // 假设加密后长度与明文相同
+        std::cout << std::endl;
+    }
+    
+    // 数据解密
+    uint8_t decrypted[32];
+    uint8_t iv_dec[] = "1234567890123456";
+    int decryptResult = crypto.sm4Crypto(1, 1, 1, iv_dec, encrypted, 16, decrypted); // keyIndex=1, type=decrypt, mode=CBC
+    if (decryptResult == 0) {
+        decrypted[16] = '\0'; // Ensure null termination for printing
+        std::cout << "Decrypted data: " << decrypted << std::endl;
+    }
+
+    // SM3摘要计算
+    uint8_t dataToHash[] = "This is a test for SM3.";
+    uint8_t hashOutput[32];
+    int hashResult = crypto.sm3Hash(dataToHash, sizeof(dataToHash) - 1, hashOutput);
+    if (hashResult == 0) {
+        std::cout << "SM3 hash: ";
+        printHex(hashOutput, 32);
+        std::cout << std::endl;
+    }
+
+    // SM2签名
+    uint8_t dataToSign[] = "Sign this data.";
+    uint8_t signature[64];
+    int signResult = crypto.sm2Sign(signature, dataToSign, sizeof(dataToSign) - 1, 0, 2); // 使用密钥槽位0, ID槽位2
+    if (signResult == 0) {
+        std::cout << "SM2 signature (first 10 bytes): ";
+        printHex(signature, 10);
+        std::cout << "..." << std::endl;
+    }
+
+    // SM2验签
+    int verifyResult = crypto.sm2Verify(signature, dataToSign, sizeof(dataToSign) - 1, 0, 2); // 使用密钥槽位0, ID槽位2
+    std::cout << "SM2 verification result: " << verifyResult << " (0 means success)" << std::endl;
 }
 
 int main() {
@@ -208,11 +250,12 @@ int main() {
     std::cout << "- Without GmSSL: Simplified placeholder implementations for testing" << std::endl;
     
     try {
+        CryptoSoftware crypto_instance;
         // 演示各种加密功能
         demonstrateSM3();
         demonstrateSM4();
         demonstrateSM2();
-        demonstrateICryptoProviderInterface();
+        demonstrateICryptoProviderInterface(crypto_instance);
         
         std::cout << "\n====================================" << std::endl;
         std::cout << "Demonstration completed successfully!" << std::endl;
