@@ -57,11 +57,15 @@ if(NOT GMSSL_PKG_OK)
     if(GMSSL_INCLUDE_DIRS AND GMSSL_LIBRARIES)
         message(STATUS "Found GmSSL headers in ${GMSSL_INCLUDE_DIRS} and libs: ${GMSSL_LIBRARIES}")
         set(GMSSL_PKG_OK TRUE)
+        # 定义HAVE_GMSSL宏
+        add_definitions(-DHAVE_GMSSL=1)
     else()
         message(FATAL_ERROR "GmSSL not found. Please install GmSSL (and ensure pkg-config can find it) or set GMSSL_INCLUDE_DIRS/GMSSL_LIBRARIES.\nHint: check /usr/local/include, /usr/local/lib, and run 'pkg-config --list-all | grep gmssl' inside the container. You can also set -DGMSSL_INCLUDE_DIRS=/path -DGMSSL_LIBRARIES=/path to help CMake find it.")
     endif()
 else()
     message(STATUS "GmSSL found via pkg-config: includes=${GMSSL_INCLUDE_DIRS}, libs=${GMSSL_LIBRARIES}")
+    # 定义HAVE_GMSSL宏
+    add_definitions(-DHAVE_GMSSL=1)
 endif()
 
 # 查找JSON库
@@ -81,24 +85,22 @@ find_package(Threads REQUIRED)
 
 # 源文件
 set(XUANYU_SOURCES
-    src/comm/TransportSocket.cpp
+    src/transport/TransportSocket.cpp
     src/crypto/CryptoSoftware.cpp
-    src/protocol/SecureBase.cpp
-    src/protocol/SecureClient.cpp
-    src/protocol/SecureServer.cpp
-    src/protocol/HandshakeContext.cpp
+    src/communication/SecureBase.cpp
+    src/communication/SecureClient.cpp
+    src/communication/SecureServer.cpp
 )
 
 # 头文件
 set(XUANYU_HEADERS
-    include/comm/ITransportAdapter.h
-    include/comm/TransportSocket.h
+    include/transport/ITransportAdapter.h
+    include/transport/TransportSocket.h
     include/crypto/ICryptoProvider.h
     include/crypto/CryptoSoftware.h
-    include/protocol/SecureBase.h
-    include/protocol/SecureClient.h
-    include/protocol/SecureServer.h
-    include/protocol/HandshakeContext.h
+    include/communication/SecureBase.h
+    include/communication/SecureClient.h
+    include/communication/SecureServer.h
 )
 
 # 创建库
@@ -178,7 +180,7 @@ if(BUILD_EXAMPLES)
 endif()
 
 # 基准测试
-if(BUILD_BENCHMARKS)
+if(BUILD_BENCHMARKS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks")
     add_subdirectory(benchmarks)
 endif()
 

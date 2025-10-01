@@ -5,6 +5,8 @@ includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
 
 Name: XuanYu
 Description: High Security Communication Framework
-Version: @PACKAGE_VERSION@
+Version: @PROJECT_VERSION@
+Requires: gmssl
 Libs: -L${libdir} -lxuanyu
-Cflags: -I${includedir}
+Libs.private: -pthread
+Cflags: -I${includedir}/xuanyu

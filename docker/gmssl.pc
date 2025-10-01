@@ -4,7 +4,9 @@ libdir=${exec_prefix}/lib
 includedir=${prefix}/include
 
 Name: GmSSL
-Description: GmSSL cryptographic library (SM2/SM3/SM4)
-Version: 3.1.2
+Description: GM/T SSL implementation
+Version: 3.1.0
+Requires:
 Libs: -L${libdir} -lgmssl
+Libs.private: -ldl -lpthread
 Cflags: -I${includedir}

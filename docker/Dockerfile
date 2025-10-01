@@ -36,6 +36,7 @@ RUN apt-get update && apt-get install -y \
     libtool \
     # 调试和分析工具
     gdb \
+    gdb-multiarch \
     valgrind \
     perf-tools-unstable \
     # 静态分析工具
@@ -45,10 +46,19 @@ RUN apt-get update && apt-get install -y \
     netcat-openbsd \
     tcpdump \
     wireshark-common \
+    # QEMU用于ARM模拟
+    qemu-user-static \
     # 其他工具
     vim \
     tree \
     htop \
+    && rm -rf /var/lib/apt/lists/*
+
+# 单独安装ARM交叉编译工具链（避免armhf仓库问题）
+RUN apt-get update && apt-get install -y \
+    gcc-arm-linux-gnueabihf \
+    g++-arm-linux-gnueabihf \
+    libc6-dev-armhf-cross \
     && rm -rf /var/lib/apt/lists/*
 
 # 设置默认编译器
@@ -57,7 +67,15 @@ RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 100 \
     && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 100 \
     && update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-14 100
 
-# 安装GmSSL
+# 设置ARM交叉编译器链接（如果存在）
+RUN if [ -f /usr/bin/arm-linux-gnueabihf-gcc ]; then \
+        ln -sf /usr/bin/arm-linux-gnueabihf-gcc /usr/local/bin/arm-gcc; \
+    fi && \
+    if [ -f /usr/bin/arm-linux-gnueabihf-g++ ]; then \
+        ln -sf /usr/bin/arm-linux-gnueabihf-g++ /usr/local/bin/arm-g++; \
+    fi
+
+# 安装GmSSL (x86_64版本)
 WORKDIR /tmp
 RUN git clone https://github.com/guanzhi/GmSSL.git \
     && cd GmSSL \
@@ -66,10 +84,6 @@ RUN git clone https://github.com/guanzhi/GmSSL.git \
     && make -j$(nproc) \
     && make install \
     && ldconfig \
-    # 为 pkg-config 创建一个简单的 gmssl.pc，指向 /usr/local
-    && mkdir -p /usr/local/lib/pkgconfig \
-    && mkdir -p /usr/local/lib/pkgconfig \
-    && true \
     && cd / && rm -rf /tmp/GmSSL
 
 # 安装nlohmann/json
@@ -81,7 +95,7 @@ RUN git clone https://github.com/nlohmann/json.git \
     && make install \
     && cd / && rm -rf /tmp/json
 
-# 安装GoogleTest
+# 安装GoogleTest (x86_64版本)
 RUN git clone https://github.com/google/googletest.git \
     && cd googletest \
     && mkdir build && cd build \
@@ -123,9 +137,9 @@ SHELL ["/bin/bash", "-c"]
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD which gcc && which cmake && which gmssl || exit 1
+    CMD which gcc && which cmake || exit 1
 
-# 入口脚本
+# 入口脚本和配置文件
 COPY docker/entrypoint.sh /usr/local/bin/
 COPY docker/gmssl.pc /usr/local/lib/pkgconfig/gmssl.pc
 USER root
