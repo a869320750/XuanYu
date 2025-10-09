@@ -377,7 +377,7 @@ flowchart TD
     
     H --> I{超时或格式错误?}
     I -->|Yes| G
-    I -->|No| J[接收CLIENT_HELLO<br/>{device_id, nonce_c, A, sig}]
+    I -->|No| J[接收CLIENT_HELLO<br/> device_id, nonce_c, A, sig ]
     
     J --> K[查找客户端公钥]
     K --> L{客户端已注册?}
@@ -386,26 +386,26 @@ flowchart TD
     
     M --> N{签名有效?}
     N -->|No| G
-    N -->|Yes| O[生成临时密钥对<br/>(b, B=b×G)]
+    N -->|Yes| O[生成临时密钥对<br/> b, B=b×G ]
     
     O --> P[生成随机数nonce_s]
-    P --> Q[构造SERVER_HELLO消息<br/>{server_id, nonce_s, B, sig}]
+    P --> Q[构造SERVER_HELLO消息<br/> server_id, nonce_s, B, sig ]
     Q --> R[发送SERVER_HELLO]
     
     R --> S[等待CLIENT_CONFIRM]
     S --> T{超时或错误?}
     T -->|Yes| G
-    T -->|No| U[接收CLIENT_CONFIRM<br/>{device_id, mac}]
+    T -->|No| U[接收CLIENT_CONFIRM<br/> device_id, mac ]
     
     U --> V[计算共享密钥<br/>K = b × A]
-    V --> W[派生会话密钥<br/>session_key = KDF(K, nonce_c, nonce_s)]
+    V --> W[派生会话密钥<br/>session_key = KDF<K, nonce_c, nonce_s>]
     W --> X[验证客户端MAC]
     
     X --> Y{验证成功?}
     Y -->|No| G
-    Y -->|Yes| Z[生成服务端MAC<br/>mac = SM4_CMAC(session_key, "SERVER_CONFIRM")]
+    Y -->|Yes| Z[生成服务端MAC<br/>mac = SM4_CMAC<session_key, SERVER_CONFIRM>]
     
-    Z --> AA[发送SERVER_CONFIRM<br/>{server_id, mac}]
+    Z --> AA[发送SERVER_CONFIRM<br/> server_id, mac ]
     AA --> BB[分配会话ID]
     BB --> CC[存储会话信息]
     CC --> DD[[会话建立成功]]
