@@ -1,6 +1,41 @@
 # XuanYu 高安全通信框架详细设计文档
 
-## 1. 项目背景与目标
+## **数学原理**:
+  - 基于椭圆曲线离散对数问题(ECDLP)
+  - 椭圆曲线方程:y² = x³ + ax + b (mod p)
+  - 国密推荐曲线参数:p = 2²⁵⁶ - 2²²⁴ - 2⁹⁶ + 2⁶⁴ - 1
+  - 基点G的阶n = FFFFFFFE FFFFFFFF FFFFFFFF 7203DF6B 61916AC6 09B54CDD 046502BE BB6FB71F
+  
+  **密钥对生成**:
+  - 私钥d:随机数 1 ≤ d ≤ n-1
+  - 公钥Q:Q = d × G (椭圆曲线点乘,不是矩阵点乘!)
+  - 说明:× 表示标量乘法,即 d×G = G + G + ... + G (d次点加法)
+  
+  **SM2加密过程**:
+  1. 发送方获得接收方的公钥Q
+  2. 生成随机数k (1 ≤ k ≤ n-1)
+  3. 计算椭圆曲线点 C1 = k × G (这是密文的第一部分,公开传输)
+  4. 计算点 S = k × Q (利用接收方公钥,得到一个共享点)
+  5. 从S点提取x坐标,通过密钥派生函数生成密钥流: t = KDF(S.x, klen)
+  6. 计算密文数据: C2 = M ⊕ t (明文与密钥流异或)
+  7. 计算完整性校验: C3 = SM3(S.x || M || S.y)
+  8. 最终密文: C = C1 || C2 || C3
+  
+  **SM2解密过程**:
+  1. 接收方收到密文C,解析为 C1 || C2 || C3
+  2. 使用私钥d计算共享点: S = d × C1 = d × (k×G) = k × (d×G) = k × Q (与加密方算出的S相同!)
+  3. 从S点提取x坐标,派生相同的密钥流: t = KDF(S.x, klen)
+  4. 恢复明文: M = C2 ⊕ t
+  5. 验证完整性: 检查 C3 是否等于 SM3(S.x || M || S.y)
+  
+  **为什么安全**:
+  - 攻击者看到C1 = k×G和公钥Q = d×G,但无法计算出k或d (ECDLP困难问题)
+  - 没有私钥d,就无法计算共享点S = k×Q,也就无法得到密钥流t
+  - 即使截获所有公开信息,也无法解密C2
+  
+  **签名过程**:
+  - r = (e + k×G.x) mod n, s = d⁻¹(k - r×d) mod n
+  - 其中e是消息的SM3哈希值与目标
 
 ### 1.1 背景
 在物联网和嵌入式系统中，设备间通信面临严重的安全威胁：
@@ -243,25 +278,25 @@ flowchart TD
     
     D --> F{连接成功?}
     F -->|No| E
-    F -->|Yes| G[生成临时密钥对<br/>(a, A=a×G)]
+    F -->|Yes| G[生成临时密钥对<br/> a, A=a×G]
     
     G --> H[生成随机数nonce_c]
-    H --> I[构造CLIENT_HELLO消息<br/>{device_id, nonce_c, A, sig}]
+    H --> I[构造CLIENT_HELLO消息 device_id, nonce_c, A, sig]
     I --> J[发送CLIENT_HELLO]
     
     J --> K[等待SERVER_HELLO]
     K --> L{超时或错误?}
     L -->|Yes| E
-    L -->|No| M[接收SERVER_HELLO<br/>{server_id, nonce_s, B, sig}]
+    L -->|No| M[接收SERVER_HELLO server_id, nonce_s, B, sig]
     
     M --> N[验证服务端签名]
     N --> O{签名有效?}
     O -->|No| E
     O -->|Yes| P[计算共享密钥<br/>K = a × B]
     
-    P --> Q[派生会话密钥<br/>session_key = KDF(K, nonce_c, nonce_s)]
-    Q --> R[生成确认MAC<br/>mac = SM4_CMAC(session_key, "CLIENT_CONFIRM")]
-    R --> S[发送CLIENT_CONFIRM<br/>{device_id, mac}]
+    P --> Q[派生会话密钥<br/>session_key = KDF K, nonce_c, nonce_s]
+    Q --> R[生成确认MAC<br/>mac = SM4_CMAC<session_key, CLIENT_CONFIRM>]
+    R --> S[发送CLIENT_CONFIRM<br/> device_id, mac]
     
     S --> T[等待SERVER_CONFIRM]
     T --> U{收到确认?}
